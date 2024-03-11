@@ -9624,9 +9624,40 @@ decode_category(uint encoding, instr_t *instr)
      */
 
     uint op1 = BITS(encoding, 28, 25);
-    if ((BITS(encoding, 31, 31) == 1 && op1 == 0) || op1 == 0x2) /* SME || SVE */
+    if ((BITS(encoding, 31, 31) == 1 && op1 == 0) || op1 == 0x2) /* SME || SVE */ {
         category = DR_INSTR_CATEGORY_SIMD;
-    else if (BITS(encoding, 31, 31) == 0 && op1 == 0) /* op1 is 0 and 31 bit is 0 */
+        /* EVH TODO SME */
+        uint sve_op0 = BITS(encoding, 31, 29);
+        uint sve_op1 = BITS(encoding, 24, 10);
+        switch (sve_op0) {
+            case 7: /* 111 - Scatters & Contiguous Store */
+                category |= DR_INSTR_CATEGORY_STORE;
+                break;
+            case 6: /* 110 - 64-Gathers */
+                category |= DR_INSTR_CATEGORY_LOAD;
+                break;
+            case 5: /* 101 - Contigous Loads */
+                category |= DR_INSTR_CATEGORY_LOAD;
+                break;
+            case 4: /* 100 - 32-bit Gather and Unsized Contiguous */
+                category |= DR_INSTR_CATEGORY_LOAD;
+                break;
+            case 3: /* 011 - Fload Point Vector Ops */
+                if((sve_op1 & 0b100111100111000) == 0b000001000101000) 
+                    category |= DR_INSTR_CATEGORY_FP | DR_INSTR_CATEGORY_CONVERT;
+                else
+                    category |= DR_INSTR_CATEGORY_FP | DR_INSTR_CATEGORY_MATH;
+                break;
+            case 2: /* 010 - Integer Math */
+                category |= DR_INSTR_CATEGORY_MATH;
+                break;
+            case 1: /* 001 - Predication and other internal ops */
+                category |= DR_INSTR_CATEGORY_MATH;
+                break;
+            default: /* 000 - Integer Math */
+                category |= DR_INSTR_CATEGORY_MATH;
+        }
+    } else if (BITS(encoding, 31, 31) == 0 && op1 == 0) /* op1 is 0 and 31 bit is 0 */
         category = DR_INSTR_CATEGORY_UNCATEGORIZED;
     else {
         /*                       op1 - xxxx
@@ -9656,6 +9687,7 @@ decode_category(uint encoding, instr_t *instr)
                 /* op0 is 0xx0 || op0 is 01x1 */
                 if ((op0 & 0x9) == 0 || (op0 & 0x5) == 0x5)
                     category = DR_INSTR_CATEGORY_SIMD;
+                    /* EVH TODO - need to break out and add sub-categories */
                 else {
                     category = DR_INSTR_CATEGORY_FP;
                     if (op0 == 0xC) /* op0 is 1100 */
